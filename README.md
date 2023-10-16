@@ -16,8 +16,8 @@
 - 
 
 ## Fuentes interesantes
-https://www.xataka.com/pro/digital-twins-que-sirven-cuales-beneficios-problemas-gemelos-digitales
-https://www.secura.com/blog/a-pentesters-view-on-digital-twins-technology
-https://www.challenge.org/insights/digital-twin-cyber-security/
-https://managementevents.com/news/digital-twins-for-cyber-security/
-https://docs.vyos.io/en/equuleus/installation/virtual/gns3.html
+- https://www.xataka.com/pro/digital-twins-que-sirven-cuales-beneficios-problemas-gemelos-digitales
+- https://www.secura.com/blog/a-pentesters-view-on-digital-twins-technology
+- https://www.challenge.org/insights/digital-twin-cyber-security/
+- https://managementevents.com/news/digital-twins-for-cyber-security/
+- https://docs.vyos.io/en/equuleus/installation/virtual/gns3.html
