@@ -21,3 +21,4 @@
 - https://www.challenge.org/insights/digital-twin-cyber-security/
 - https://managementevents.com/news/digital-twins-for-cyber-security/
 - https://docs.vyos.io/en/equuleus/installation/virtual/gns3.html
+- https://aprenderlinux.org/gns3-simulador-de-red-para-configurar-redes-virtuales-en-linux/?expand_article=1
