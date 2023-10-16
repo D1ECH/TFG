@@ -9,3 +9,8 @@
 - documentación TFG --> períodos de defensa, etc.
 - anteproyecto
 - modelo TFG
+---
+- GNS3
+- Gemelo digital
+- Creación de una red local (dispositivos de mi casa y demás)
+- 
