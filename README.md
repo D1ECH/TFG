@@ -15,9 +15,9 @@
 - Creación de una red local (dispositivos de mi casa y demás)
 ---
 - **3/11/23**
-- Nos dimos cuenta de que el gemelo digital no era tan posible como parecía, primeramente porque la utilidad no nos surgía y segundo porque a nivel de recursos con solo mi portátil no era llevadero, así que planteamos más opciones que siguen la misma línea de proyecto pero adaptadas a nuestras condiciones. Lo que se nos ocurrió fue el crear una sandbox completamente aislada al sistema donde poder recrear una red dentro y hacerle pruebas para que en base a lo que se obtenga se genere un reporte con las contramedidas a tomar.
-- La sandbox no podía ser una máquina virtual porque existen vulnerabilidades que consiguen escapar e infectar a otras máquinas o incluso al equipo local
-- 
+  - Nos dimos cuenta de que el gemelo digital no era tan posible como parecía, primeramente porque la utilidad no nos surgía y segundo porque a nivel de recursos con solo mi portátil no era llevadero, así que planteamos más opciones que siguen la misma línea de proyecto pero adaptadas a nuestras condiciones. Lo que se nos ocurrió fue el crear una sandbox completamente aislada al sistema donde poder recrear una red dentro y hacerle pruebas para que en base a lo que se obtenga se genere un reporte con las contramedidas a tomar.
+  - La sandbox no podía ser una máquina virtual porque existen vulnerabilidades que consiguen escapar e infectar a otras máquinas o incluso al equipo local
+  - 
  
 ## Fuentes interesantes
 - https://www.xataka.com/pro/digital-twins-que-sirven-cuales-beneficios-problemas-gemelos-digitales
