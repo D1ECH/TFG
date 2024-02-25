@@ -26,7 +26,9 @@
 - El gestor de confianza debe computar la confianza en base a unos parámetros y valores de los distintos dispositivos --> cómo los obtiene, cómo los normaliza, cómo computa, lo hace en el broker que es el intermediario de transmisión???
 - Qué parámetros se van a tener en cuenta en el cómputo de confianza y cómo se hará este cálculo, qué thresholds, qué "nota" se le dará a cada dispositivo para ver si es válido o no, cómo se prohíbe la comunicación???
 - Cómo se simulan los dispositivos???
-- 
+- entorno dinámico cambiante? Cómo se van definiendo los escenarios
+- def modelo y métrica
+- interfaz de usuario necesaria?
 
 ## Fuentes interesantes
 - https://www.xataka.com/pro/digital-twins-que-sirven-cuales-beneficios-problemas-gemelos-digitales
