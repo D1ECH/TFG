@@ -20,7 +20,10 @@
     - 
   7. Modelling trust dynamics in the Internet of Things
     - 
-  
+- PDFs para el desarrollo del proyecto:
+  1. Definición Broker Comunicaciones desde una perspectiva de Confianza
+    - Este paper es el documento inicial para empezar a trabajar sobre el broker de confianza. Es el escenario general.
+    - 
 ### Dudas, preguntas... lo que vaya surgiendo
 - En qué entorno se va a desarrollar el trabajo, contexto --> empresa, hogar...???
 - El gestor de confianza debe computar la confianza en base a unos parámetros y valores de los distintos dispositivos --> cómo los obtiene, cómo los normaliza, cómo computa, lo hace en el broker que es el intermediario de transmisión???
