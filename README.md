@@ -33,6 +33,18 @@
 - def modelo y métrica
 - interfaz de usuario necesaria?
 
+
+- Cómo se crea un broker de publicación suscripción?? Tiene que tener interfaz??
+- Humano, Disp. Físico y Disp. Digital --> Va a ver diferentes tipos como en el ejemplo de código y contextos para crear grupos aleatorios para plantear distintas situaciones??
+- Cómo se protegen las interacciones?? Cifrados para la publicación en el broker y medidas de autenticación para quién puede o no leer qué??
+- reputación inicial para dispositivo usuario que debe irse actualizando en base a las acciones que vaya haciendo y esto influye también en el cálculo de confianza (reputación y confianza son dos cosas)
+- gestor de anomalías?? Nos da los datos con un formato concreto? hay que mandarle los datos con un formato concreto? qué pinta en la publicación/subscripción??
+- La simulación cómo va a funcionar??
+- De cara a la publicación subscripción va a hacer falta un broker donde se haga esto --> mosquitto? hay que crearlo? sino no sé cómo se enfocaría esto?
+- Además cómo se añaden las medidas de seguridad en caso de usar un broker externo o cómo se añaden si lo creamos nosotros.
+- No entiendo la interacción entre anomalía y confianza y sobre qué se calcula la confianza
+- La comunicación entre los módulos de confianza y anomalía es la única comunicación?? se usa MQTT, pero hay que implementarle más seguridad como se explica en el paper referenciado?? 
+
 ## Fuentes interesantes
 - https://www.xataka.com/pro/digital-twins-que-sirven-cuales-beneficios-problemas-gemelos-digitales
 - https://www.secura.com/blog/a-pentesters-view-on-digital-twins-technology
