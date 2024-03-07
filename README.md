@@ -32,8 +32,7 @@
 - entorno dinámico cambiante? Cómo se van definiendo los escenarios
 - def modelo y métrica
 - interfaz de usuario necesaria?
-
-
+---
 - Cómo se crea un broker de publicación suscripción?? Tiene que tener interfaz??
 - Humano, Disp. Físico y Disp. Digital --> Va a ver diferentes tipos como en el ejemplo de código y contextos para crear grupos aleatorios para plantear distintas situaciones??
 - Cómo se protegen las interacciones?? Cifrados para la publicación en el broker y medidas de autenticación para quién puede o no leer qué??
