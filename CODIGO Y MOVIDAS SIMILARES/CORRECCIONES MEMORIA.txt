@@ -1,0 +1,15 @@
+motivación --> objetivos --> metodología --> estructura del documento
+
+Estado del arte como un capítulo
+
+párrafos explicativos del capítulo
+
+tipos de modelos --> explicar un poco y centrar en lo mío
+
+diseño y desarrollo --> se explica el proceso y luego los casos de uso se presenta el resultado
+
+entrega del código --> INCLUIR EL CÓDIGO --> CÓMO????
+
+IMÁGENES DE CÓDIGO EN EL TEXTO Y SINO ANEXO Y HACER REFERENCIA
+
+HILOS PARA SIMULAR DISPOSITIVOS - dockerfiles

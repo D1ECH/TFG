@@ -1,0 +1,722 @@
+import java.io.*;
+import java.net.*;
+import java.security.SecureRandom;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.Date;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+
+import Dispositivos.Dispositivo;
+
+public class gestor_confianza {
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Variables globales
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    final static String DB_URL = "jdbc:mysql://localhost/trust_management";
+    final static String USERNAME = "root";
+    final static String PASSWORD = "";
+
+    static List<Dispositivo> operatorThings;
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Tratamiento de ID y anomalía
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    private static String ID_existente(String mensajeCliente, List<Dispositivo> operatorThings){
+        /*
+         * Comprobar si el ID existe en la BD de dispositivos.
+         *  --> Si existe se procede a calcular el nivel de riesgo para actualizar el ESTADO del dispositivo --> [prohibido | pendiente_evaluacion] --> Cálculo de confianza --> [cuarentena | confiable]   
+         *  --> No existe directamente no se hace nada --> Erro: dispositivo no existente.
+         */
+
+        String res = "No se ha encontrado el dispositivo entre los existentes";
+
+        // Separar la cadena en partes usando el delimitador " ==> "
+        String[] partes = mensajeCliente.split(" ==> ");
+
+        // Obtener la subcadena antes del delimitador " ==> "
+        String idAnomalia = partes[0].split(":")[0];
+        String amenaza = partes[0].split(":")[1];
+
+        // Obtener la subcadena después del delimitador " ==> "
+        String info = partes[1];
+
+        // Separar la información en partes usando el delimitador " --> "
+        String[] partesInfo = info.split(" --> ");
+
+        // Obtener thingID, probabilidad, gravedad y detectabilidad
+        String thingID = partesInfo[0].trim();
+        String[] valores = partesInfo[1].split(" \\| ");
+        String probabilidad = valores[0].substring(1).trim();
+        String gravedad = valores[1].trim();
+        String detectabilidad = valores[2].substring(0, valores[2].indexOf("]")).trim();
+
+        // Imprimir los valores obtenidos
+        System.out.println(" # ID de Anomalía: " + idAnomalia);
+        System.out.println(" # Amenaza: " + amenaza);
+        System.out.println(" # thingID: " + thingID);
+        System.out.println(" # Probabilidad: " + probabilidad);
+        System.out.println(" # Gravedad: " + gravedad);
+        System.out.println(" # Detectabilidad: " + detectabilidad);
+
+        if(encontrarBD(thingID)){
+            res = "Dispositivo encontrado";
+            res = nivel_riesgo(probabilidad, gravedad, detectabilidad, thingID);
+        }
+
+        // for (Dispositivo dispositivo : operatorThings) {
+        //     if(dispositivo.getThingID()==Integer.parseInt(thingID)){
+        //             String nivel_riesgo = nivel_riesgo(probabilidad,gravedad,detectabilidad);
+        //             res = "El dispositivo se encuentra entre los existentes.\nNivel de riesgo = " + nivel_riesgo;
+                    
+        //         break;
+        //     }
+        // }
+        return res;
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /*
+    * Cáculo del nivel de riesgo en base a los datos de la anomalía: criticidad, probabilidad y detectabilidad.
+    * Los valores se combinan entre ellos mediante una multiplicación. Este es un enfoque común utilizado 
+    * en muchos métodos de riesgo [2]. Si el resultado es inferior a 9, tenemos un riesgo bajo. Si el resultado 
+    * está entre 9 y 27, tenemos un riesgo medio. Si el valor es superior a 27, tenemos un riesgo alto. El valor del riesgo 
+    * global se ha elegido según los siguientes criterios:
+    * 
+    *  1) Es el mismo nivel de todos los parámetros si pertenecen al mismo nivel (es decir, bajo si L, S y D son bajos).
+    *  2) Bajo, si solo hay un parámetro medio y los otros dos parámetros son bajos.
+    *  3) Alto, si hay dos o más parámetros configurados en alto o dos parámetros configurados en medio y uno configurado en alto.
+    *  4) Medio, en caso contrario.
+    * En el caso de que el riesgo calculado sea alto, el dispositivo no se podrá agregar a la red o se deberá prohibir. 
+    * En el caso de que el valor del riesgo sea bajo o medio el dispositivo puede unirse o permanecer en la red dependiendo de otros criterios
+    */
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static String nivel_riesgo(String probabilidad, String gravedad, String detectabilidad, String thingID){
+        //Almacenamos el estado actual tras haberlo recuperado de la BD;
+        int estado_actual=0;
+    
+        int calculoRiesgo = Integer.parseInt(probabilidad) * Integer.parseInt(gravedad) * Integer.parseInt(detectabilidad);
+        if(calculoRiesgo > 27){
+            //El riesgo es alto, el dispositivo debe prohibirse, no podrá ser agregado en la red.
+            //Localizar el dispositivo por su ID --> thingID y actualizar su estado a PROHIBIDO
+            System.out.println("Estado: PROHIBIDO - Nivel de riesgo: " + calculoRiesgo);
+            estado_actual = 3;
+        }else if(calculoRiesgo <= 27 && calculoRiesgo >= 9){
+            //El riesgo es medio, el dispositivo puede unirse/permanecer en la red siempre y cuando el nivel de CONFIANZA cumple los requisitos mínimos
+            System.out.println("Estado: PENDIENTE DE EVALUACIÓN - Nivel de riesgo: " + calculoRiesgo);
+            estado_actual = 2;
+        }else if(calculoRiesgo < 9){
+            //El riesgo es bajo, el dispositivo puede unirse/permanecer en la red siempre y cuando el nivel de CONFIANZA cumple los requisitos mínimos
+            System.out.println("Estado: PENDIENTE DE EVALUACIÓN - Nivel de riesgo: " + calculoRiesgo);
+            estado_actual = 1;
+        }
+    
+        
+        
+        /*
+        * Actualización del estado del dispositivo en la base de datos: si se prohibe debe borrarse de la BD para que en caso de que se mande más
+            información del dispositivo directamente ni exista en el sistema. Lo cual NO ES LO MISMO que estar en cuarentena, donde no puede comunicarse,
+            pero sigue en la red.
+        */
+        // Determinar el estado del dispositivo
+        String estado = null;
+        if (estado_actual == 3) {
+            estado = "PROHIBIDO";
+            actualizarEstadoBD(thingID, estado);
+
+        } else if (estado_actual == 2 || estado_actual == 1) {
+            // Recuperar información del dispositivo de la BD y crear un Dispositivo para usar el método de calcular_confianza
+            Dispositivo dispositivo = recuperarDispositivoDeBD(Integer.parseInt(thingID));
+
+            if (dispositivo != null) {
+                double confianza = dispositivo.calcularConfianza();
+                System.out.println("Confianza del dispositivo con ID " + thingID + ": " + confianza);
+
+                // Determinar el estado basado en la confianza calculada
+                if (confianza < 0.3) {
+                    estado = "CUARENTENA";
+                } else if (confianza >= 0.3 && confianza < 0.7) {
+                    estado = "PENDIENTE_EVALUACION";
+                    // Aquí se puede añadir lógica para más comprobaciones si el estado es pendiente de evaluación
+                    // Por ejemplo, se podría realizar una revisión manual o enviar una alerta para una inspección más detallada
+                } else if (confianza >= 0.7) {
+                    estado = "ACEPTADO";
+                }
+
+                // Actualizar el estado en la base de datos
+                actualizarEstadoBD(thingID, estado);
+
+                // Recomputar y actualizar la reputación en la BD
+                recomputarYActualizarReputacion(Integer.parseInt(thingID), confianza);
+                actualizarReputacion(Integer.parseInt(thingID), confianza);
+                System.out.println("Confianza y reputación readys");
+            } else {
+                System.out.println("No se encontró el dispositivo con ID " + thingID);
+            }
+        }
+        
+        
+        /*
+        * Actualización del estado del dispositivo en la base de datos: si queda en cuarentena deben terminar sus comunicaciones desubscribiendo sus topics,
+            borrando los topics...
+        */
+        //actualizarEstadoBD(thingID, estado);
+
+
+        /*
+        * Actualización reputación
+        */
+        
+
+        // /*
+        // * Comunicar el estado al resto de dispositivos
+        // */
+        
+        String r = "Ha llegado hasta aquí y el nivel de riesgo es: " + estado_actual;
+        return r;//estado_actual;
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Buscar un ID de dispositivo en la BD de información de dispositivos
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static Boolean encontrarBD(String thingID){
+        boolean res = false;
+        // Quizás habría que buscar antes los dispositivos en la BD y a partir de ahí ya comparar con los datos obtenidos ?????
+        Connection conn = null;
+
+        try {
+            // CONEXIÓN A LA BASE DE DATOS
+            conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
+            System.out.println("Connected database successfully...");
+            
+
+            // Consulta para verificar si el dispositivo existe
+            String query = "SELECT * FROM DISPOSITIVOS_INFO WHERE ID_DISPOSITIVO = ?";
+            PreparedStatement pstmt = conn.prepareStatement(query);
+            pstmt.setInt(1, Integer.parseInt(thingID));
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                // Dispositivo encontrado, calcular el nivel de riesgo
+                System.out.println("El dispositivo se encuentra entre los existentes.");
+                res = true;
+            
+            } else {
+                // Dispositivo no encontrado
+                System.out.println("El dispositivo no se encuentra en la base de datos.");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (conn != null) {
+                    conn.close();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        return res;
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Actualizar el estado de un ID de dispositivo en la BD de información de dispositivos
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static void actualizarEstadoBD(String thingID, String nuevoEstado){
+        Connection conn = null;
+
+        try {
+            // CONEXIÓN A LA BASE DE DATOS
+            conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
+            System.out.println("Connected database successfully...");
+            
+
+            String updateQuery = "UPDATE DISPOSITIVOS_INFO SET ESTADO_ACTUAL = ? WHERE ID_DISPOSITIVO = ?";
+            PreparedStatement pstmt = null;
+
+            pstmt = conn.prepareStatement(updateQuery);
+            pstmt.setString(1, nuevoEstado);
+            pstmt.setInt(2, Integer.parseInt(thingID));
+
+            int rowsAffected = pstmt.executeUpdate();
+
+            if (rowsAffected > 0) {
+                System.out.println("Estado del dispositivo actualizado correctamente.");
+            } else {
+                System.out.println("No se encontró el dispositivo con el ID especificado.");
+            }
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (conn != null) {
+                    conn.close();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Actualizar la reputación de un dispositivo en la BD de reputación
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static void actualizarReputacion(int dispositivoID, double confianza) {
+        Connection conn = null;
+
+        try {
+            // CONEXIÓN A LA BASE DE DATOS
+            conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
+            System.out.println("Connected database successfully...");
+            
+        
+            String updateQuery = "UPDATE REPUTACION SET VALOR_REPUTACION = ? WHERE ID_DISPOSITIVO = ?";
+            PreparedStatement pstmt = null;
+
+        
+            pstmt = conn.prepareStatement(updateQuery);
+            pstmt.setDouble(1, confianza);
+            pstmt.setInt(2, dispositivoID);
+
+            int rowsAffected = pstmt.executeUpdate();
+
+            if (rowsAffected > 0) {
+                System.out.println("Reputación del dispositivo actualizada correctamente.");
+            } else {
+                System.out.println("No se encontró el dispositivo con el ID especificado.");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (conn != null) {
+                    conn.close();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Recuperar dispositivo de la BD
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static Dispositivo recuperarDispositivoDeBD(int id) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+
+        try {
+            // Conectar a la base de datos
+            conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
+
+            // Preparar la consulta SQL
+            String sql = "SELECT * FROM DISPOSITIVOS_INFO WHERE ID_DISPOSITIVO = ?";
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setInt(1, id);
+
+            // Ejecutar la consulta
+            rs = pstmt.executeQuery();
+
+            // Procesar el resultado
+            if (rs.next()) {
+                int dispositivoID = rs.getInt("ID_DISPOSITIVO");
+                LocalDate lastSupervision = rs.getDate("LAST_SUPERVISION").toLocalDate();
+                int numPastVulns = rs.getInt("NUM_PAST_VULNS");
+                boolean securityCertification = rs.getBoolean("SECURITY_CERTIFICATION");
+                int reputacionInicial = rs.getInt("REPUTACION");
+                int tiempoFuncionamiento = rs.getInt("TIEMPO_FUNCIONAMIENTO");
+                int actualizacionesFirmware = rs.getInt("ACTUALIZACIONES_FIRMWARE");
+                int frecuenciaComunicacion = rs.getInt("FRECUENCIA_COMUNICACION");
+                int historialFallos = rs.getInt("HISTORIAL_FALLOS");
+                String tipo = rs.getString("TIPO");
+                String estado = rs.getString("ESTADO_ACTUAL");
+
+                // Crear y devolver el objeto Dispositivo
+                Dispositivo dispositivo = new Dispositivo(dispositivoID, numPastVulns, securityCertification, lastSupervision, 
+                                                        tiempoFuncionamiento, actualizacionesFirmware, frecuenciaComunicacion, historialFallos, reputacionInicial, tipo, estado);
+                return dispositivo;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (rs != null) rs.close();
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        return null;  // Retornar null si no se encuentra el dispositivo
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Recomputar reputación y actualizarla en la BD de dispositivos.
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static void recomputarYActualizarReputacion(int id, double confianzaCalculada) {
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+    
+        try {
+            // Conectar a la base de datos
+            conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
+    
+            // Recuperar la reputación inicial del dispositivo
+            String selectSQL = "SELECT REPUTACION FROM DISPOSITIVOS_INFO WHERE ID_DISPOSITIVO = ?";
+            pstmt = conn.prepareStatement(selectSQL);
+            pstmt.setInt(1, id);
+            ResultSet rs = pstmt.executeQuery();
+    
+            if (rs.next()) {
+                int reputacionInicial = rs.getInt("REPUTACION");
+                int nuevaReputacion;
+    
+                // Recomputar la reputación en función de la confianza calculada
+                if (confianzaCalculada >= 0.8) {
+                    nuevaReputacion = reputacionInicial + 20; // Incremento significativo
+                } else if (confianzaCalculada >= 0.5) {
+                    nuevaReputacion = reputacionInicial + 10; // Incremento moderado
+                } else {
+                    nuevaReputacion = reputacionInicial - 15; // Reducción
+                }
+    
+                // Asegurarse de que la reputación esté entre 0 y 100
+                if (nuevaReputacion > 100) {
+                    nuevaReputacion = 100;
+                } else if (nuevaReputacion < 0) {
+                    nuevaReputacion = 0;
+                }
+    
+                // Actualizar la reputación en la base de datos
+                String updateSQL = "UPDATE DISPOSITIVOS_INFO SET REPUTACION = ? WHERE ID_DISPOSITIVO = ?";
+                pstmt = conn.prepareStatement(updateSQL);
+                pstmt.setInt(1, nuevaReputacion);
+                pstmt.setInt(2, id);
+    
+                pstmt.executeUpdate();
+                System.out.println("Reputación actualizada correctamente para el dispositivo con ID " + id);
+            } else {
+                System.out.println("No se encontró el dispositivo con ID " + id);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (pstmt != null) pstmt.close();
+                if (conn != null) conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // MAIN
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    public static void main(String[] args) throws Exception {
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // GENERACIÓN DISPOSITIVOS
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ArrayList<Dispositivo> operatorThings = new ArrayList<>();
+        Dispositivo thingRandom;
+
+        // Generación de Dispositivos --> Se generan 4 con IDs random
+        for (int j = 0; j < 4; j++) {
+            // thingID: 0 to 32000
+            SecureRandom randomThingID = new SecureRandom();
+            int thingID = randomThingID.nextInt(32001);
+
+            // LastSupervision: 01/01/2017 to 31/12/2017 
+            long minDayThing = LocalDate.of(2017, 1, 1).toEpochDay();
+            long maxDayThing = LocalDate.of(2017, 12, 31).toEpochDay();
+            long randomDayThing = ThreadLocalRandom.current().nextLong(minDayThing, maxDayThing);
+            LocalDate lastSupervision = LocalDate.ofEpochDay(randomDayThing);
+
+            // NbPastDefaillances: 0 to 30
+            SecureRandom randomDefaillances = new SecureRandom();
+            int nbPastDefaillances = randomDefaillances.nextInt(31);
+
+            // SecurityCertification: True or False
+            SecureRandom randomCertification = new SecureRandom();
+            boolean securityCertification = randomCertification.nextBoolean();
+
+            // Tipo de dispositivo: Físico || Virtual
+            String tipo = (randomCertification.nextBoolean()) ? "Fisico" : "Virtual";
+
+            // Reputación inicial: 0 a 100
+            int reputacionInicial = randomThingID.nextInt(101);
+
+            // Estado actual: "pendiente_evaluacion"
+            String estadoActual = "pendiente_evaluacion";
+
+            // Tiempo de funcionamiento: 0 a 2000 horas
+            int tiempoFuncionamiento = randomThingID.nextInt(2001);
+
+            // Actualizaciones de firmware: 0 a 20
+            int actualizacionesFirmware = randomThingID.nextInt(21);
+
+            // Frecuencia de comunicación: 0 a 200
+            int frecuenciaComunicacion = randomThingID.nextInt(201);
+
+            // Historial de fallos: 0 a 10
+            int historialFallos = randomThingID.nextInt(11);
+
+            // Constructor de Dispositivo
+            thingRandom = new Dispositivo(thingID, nbPastDefaillances, securityCertification, lastSupervision, 
+                                          tiempoFuncionamiento, actualizacionesFirmware, frecuenciaComunicacion, historialFallos,
+                                          reputacionInicial, tipo, estadoActual);
+            operatorThings.add(thingRandom);
+        }
+
+        // Dispositivo no aleatorio para que coincida con el creado en el cliente
+        Dispositivo dispositivoCoincide = new Dispositivo(1, 1, true, LocalDate.of(2002, 1, 1), 
+                                                          0, 0, 0, 0, 1, "virtual", "pendiente_evaluacion");
+        operatorThings.add(dispositivoCoincide);
+
+        // TRAZA
+        // Mostramos los IDs de los dispositivos creados
+        for (Dispositivo dispositivo : operatorThings) {
+            System.out.println(dispositivo);
+        }
+
+        System.out.println("\n");
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // CONEXIÓN A BD Y CREAR TABLAS DISPOSITIVOS Y REPUTACIÓN
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        Connection conn = null;
+        Statement stmt = null;
+
+        try {
+            // CONEXIÓN A LA BASE DE DATOS
+            conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
+            System.out.println("Connected database successfully...");
+
+            // Verificar si la tabla ya existe
+            DatabaseMetaData metadata = conn.getMetaData();
+            ResultSet tables = metadata.getTables(null, null, "DISPOSITIVOS_INFO", null);
+
+            if (!tables.next()) {
+                // La tabla no existe, por lo tanto, podemos proceder a crearla
+
+                // CREAR STATEMENT
+                stmt = conn.createStatement();
+
+                // CREACIÓN DE LA TABLA
+                String sql = "CREATE TABLE DISPOSITIVOS_INFO " +
+                        "(ID_DISPOSITIVO INTEGER not NULL, " +
+                        " LAST_SUPERVISION DATE, " + 
+                        " NUM_PAST_VULNS INTEGER, " + 
+                        " SECURITY_CERTIFICATION BOOLEAN, " +
+                        " TIPO VARCHAR(128), " +
+                        " REPUTACION INTEGER, "+ 
+                        " ESTADO_ACTUAL VARCHAR(128), " +
+                        " TIEMPO_FUNCIONAMIENTO INTEGER, " +
+                        " ACTUALIZACIONES_FIRMWARE INTEGER, " +
+                        " FRECUENCIA_COMUNICACION INTEGER, " +
+                        " HISTORIAL_FALLOS INTEGER, " +
+                        " PRIMARY KEY ( ID_DISPOSITIVO ))"; 
+
+                stmt.executeUpdate(sql);
+                System.out.println("Created table in given database..."); 
+
+                ///////////////////////////////////////////////// INSERTAR INFORMACIÓN EN LA TABLA ////////////////////////////////////////////////////////////////////////////////////////
+                String insertarSQL = "INSERT INTO DISPOSITIVOS_INFO (ID_DISPOSITIVO, LAST_SUPERVISION, NUM_PAST_VULNS, SECURITY_CERTIFICATION, TIPO, REPUTACION, ESTADO_ACTUAL, " +
+                "TIEMPO_FUNCIONAMIENTO, ACTUALIZACIONES_FIRMWARE, FRECUENCIA_COMUNICACION, HISTORIAL_FALLOS) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+                PreparedStatement pstmt = conn.prepareStatement(insertarSQL);
+
+                for (Dispositivo dispositivo : operatorThings) {
+                pstmt.setInt(1, dispositivo.getId());
+                pstmt.setDate(2, java.sql.Date.valueOf(dispositivo.getUltimaRevision()));
+                pstmt.setInt(3, dispositivo.getNumVulnerabilidades());
+                pstmt.setBoolean(4, dispositivo.isTieneCertificado());
+                pstmt.setString(5, dispositivo.getTipo());
+                pstmt.setInt(6, dispositivo.getReputacionInicial());
+                pstmt.setString(7, dispositivo.getEstadoActual());
+                pstmt.setInt(8, dispositivo.getTiempoFuncionamiento());
+                pstmt.setInt(9, dispositivo.getActualizacionesFirmware());
+                pstmt.setInt(10, dispositivo.getFrecuenciaComunicacion());
+                pstmt.setInt(11, dispositivo.getHistorialFallos());
+
+                pstmt.executeUpdate();
+                }
+
+                System.out.println("Datos insertados correctamente...");
+            } else {
+                System.out.println("Table already exists in the database.");
+            }
+
+            // Verificar si la tabla REPUTACION ya existe
+            ResultSet tablesReputacion = metadata.getTables(null, null, "REPUTACION", null);
+
+            if (!tablesReputacion.next()) {
+                // La tabla REPUTACION no existe, por lo tanto, podemos proceder a crearla
+
+                // CREAR STATEMENT
+                stmt = conn.createStatement();
+
+                // CREACIÓN DE LA TABLA REPUTACION
+                String sqlReputacion = "CREATE TABLE REPUTACION " +
+                "(ID_HISTORICO INT AUTO_INCREMENT PRIMARY KEY not NULL, " +
+                " ID_DISPOSITIVO INTEGER not NULL, " + 
+                " TIMESTAMP VARCHAR(128) not NULL, " + 
+                " VALOR_REPUTACION INTEGER not NULL)"; 
+
+                stmt.executeUpdate(sqlReputacion);
+                System.out.println("Created REPUTACION table in the database..."); 
+            
+            
+                ///////////////////////////////////////////////// RECUPERAR LOS VALORES MÁS ACTUALIZADOS DE LA TABLA DE DISPOSITIVOS ////////////////////////////////////////////////////////////////////////////////////////
+                String obtenerValoresSQL = "SELECT ID_DISPOSITIVO, REPUTACION FROM DISPOSITIVOS_INFO";
+                Statement stmtObtener = conn.createStatement();
+                ResultSet rs = stmtObtener.executeQuery(obtenerValoresSQL);
+
+                Map<Integer, Integer> reputaciones = new HashMap<>();
+
+                while (rs.next()) {
+                    int dispositivoID = rs.getInt("ID_DISPOSITIVO");
+                    int reputacion = rs.getInt("REPUTACION");
+
+                    // Almacenar el ID del dispositivo y su reputación más reciente en un mapa
+                    reputaciones.put(dispositivoID, reputacion);
+                }
+
+                ///////////////////////////////////////////////// INSERTAR INFORMACIÓN EN LA TABLA DE REPUTACIÓN ////////////////////////////////////////////////////////////////////////////////////////
+                String insertarReputacionSQL = "INSERT INTO REPUTACION (ID_DISPOSITIVO, TIMESTAMP, VALOR_REPUTACION) " +
+                        "VALUES (?, ?, ?)";
+                PreparedStatement pstmtReputacion = conn.prepareStatement(insertarReputacionSQL);
+
+                for (Map.Entry<Integer, Integer> entry : reputaciones.entrySet()) {
+                    int dispositivoID = entry.getKey();
+                    int reputacion = entry.getValue();
+
+                    // Generar un timestamp actual en Java
+                    long timestampMillis = System.currentTimeMillis();
+                    Timestamp timestamp = new Timestamp(timestampMillis);
+
+                    pstmtReputacion.setInt(1, dispositivoID);
+                    pstmtReputacion.setString(2,timestamp.toString());
+                    pstmtReputacion.setInt(3,reputacion);
+
+                    pstmtReputacion.executeUpdate();
+                }
+
+                System.out.println("Datos de reputación insertados correctamente...");
+            } else {
+                System.out.println("REPUTACION table already exists in the database.");
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            // Cerrar recursos
+            try {
+                if (stmt != null) {
+                    stmt.close();
+                }
+                if (conn != null) {
+                    conn.close();
+                }
+            } catch (SQLException se) {
+                se.printStackTrace();
+            }
+        }
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        //System.out.println(ID_existente(args[0], operatorThings));
+                        System.out.println(ID_existente("1:CVE-0 ==> 1 --> [1 | 1 | 1]: Descripción 0", operatorThings));
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        
+       
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+

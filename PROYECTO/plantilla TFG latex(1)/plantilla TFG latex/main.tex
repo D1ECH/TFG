@@ -1,0 +1,66 @@
+\documentclass[12pt, a4paper, twoside]{article}
+
+%% Preamble
+\usepackage{umatfgenglish}
+\usepackage{blindtext}
+\graphicspath{ {./images/} }
+
+\begin{document}
+
+\includepdf[noautoscale=true, width=\paperwidth]{title.pdf}
+
+\newpage
+
+%% Abstract
+\begin{abstract}
+    \blindtext[2]
+
+	\bfseries{\large{Keywords:}}
+\end{abstract}
+
+\tableofcontents
+
+%% Sections
+\section{One \\}
+
+\subsection{Motivation}
+    \blindtext[2]
+    
+    \begin{figure}[h]
+      \centering
+        \includegraphics[width=0.5\textwidth]{xp}
+      \caption{A diagram showing the iterations of extreme programming.}
+    \end{figure}
+    
+    \blindtext[4]
+
+\section{Two \\}
+    \blindmathpaper
+
+%% Bibliography
+\begin{thebibliography}{9}
+    \bibitem{latexcompanion} 
+    Michel Goossens, Frank Mittelbach, and Alexander Samarin. 
+    \textit{The \LaTeX\ Companion}. 
+    Addison-Wesley, Reading, Massachusetts, 1993.
+    
+    \bibitem{einstein} 
+    Albert Einstein. 
+    \textit{Zur Elektrodynamik bewegter K{\"o}rper}. (German) 
+    [\textit{On the electrodynamics of moving bodies}]. 
+    Annalen der Physik, 322(10):891–921, 1905.
+\end{thebibliography}
+
+\newpage
+
+%% Apendices
+\begin{umaappendices}
+\section{Installation \\ Manual}
+    
+    \textbf{\large{Requirements:}}
+    
+    \blindtext
+
+\end{umaappendices}
+
+\end{document}
